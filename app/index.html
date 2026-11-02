@@ -1483,24 +1483,52 @@
             'com.disney.disneyplus-prod': 'disneyplus',
             'spotify-beehive': 'spotify'
         };
-        function addTileImage(container, url, branded) {
+        function addTileImage(container, url, branded, alternatives) {
             var img = document.createElement('img');
             img.alt = '';
             if (branded) img.className = 'tile-brand-logo';
             var fallback = container.firstElementChild;
-            if (fallback) fallback.style.visibility = 'hidden';
-            img.onload = function() { if (fallback) fallback.style.visibility = 'hidden'; };
-            img.onerror = function() { img.remove(); if (fallback) fallback.style.visibility = ''; };
-            img.src = url;
+            var sources = [url];
+            (alternatives || []).forEach(function(candidate) {
+                if (candidate && sources.indexOf(candidate) === -1) sources.push(candidate);
+            });
+            var next = 0;
+            img.onload = function() {
+                if (fallback) fallback.style.visibility = 'hidden';
+            };
+            img.onerror = function() {
+                next++;
+                if (next < sources.length) {
+                    img.src = sources[next];
+                    return;
+                }
+                img.remove();
+                if (fallback) fallback.style.visibility = '';
+            };
+            img.src = sources[0];
             container.appendChild(img);
         }
 
-        function launchPointIcon(lp) {
-            var icon = lp.largeIcon || lp.icon || '';
+        function normalizeLaunchIcon(icon, lp) {
+            icon = String(icon || '');
             if (/^(https?:|file:|data:image\/)/i.test(icon)) return icon;
             if (icon.charAt(0) === '/') return 'file://' + icon;
-            if (icon && lp.folderPath) return 'file://' + lp.folderPath.replace(/\/$/, '') + '/' + icon;
-            return ''; // Unresolvable paths use the readable tile fallback.
+            if (icon && lp.folderPath) return 'file://' +
+                lp.folderPath.replace(/\/$/, '') + '/' + icon;
+            return '';
+        }
+
+        function launchPointIconCandidates(lp) {
+            var candidates = [];
+            [lp.largeIcon, lp.icon, lp.tileIcon, lp.iconSmall].forEach(function(value) {
+                var resolved = normalizeLaunchIcon(value, lp);
+                if (resolved && candidates.indexOf(resolved) === -1) candidates.push(resolved);
+            });
+            return candidates;
+        }
+
+        function launchPointIcon(lp) {
+            return launchPointIconCandidates(lp)[0] || '';
         }
 
         // Defaults favor the streaming apps with the broadest global install base
@@ -2366,8 +2394,12 @@
                 }
                 state.installedAppIds[appId] = true;
                 var exists = arrFind(state.catalog, function(c) { return c.id === appId; });
-                var iconUrl = launchPointIcon(lp);
-                if (exists && iconUrl) exists.iconUrl = iconUrl;
+                var iconCandidates = launchPointIconCandidates(lp);
+                var iconUrl = iconCandidates[0] || '';
+                if (exists && iconUrl) {
+                    exists.iconUrl = iconUrl;
+                    exists.iconCandidates = iconCandidates;
+                }
                 if (lp.systemApp && !exists) return;
                 if (!exists) {
                     state.catalog.push({
@@ -2378,6 +2410,7 @@
                         color: lp.iconColor || '#0a84ff',
                         badge: (lp.title || 'APP').substring(0, 3).toUpperCase(),
                         iconUrl: iconUrl,
+                        iconCandidates: iconCandidates,
                         bg: 'linear-gradient(135deg, ' + (lp.iconColor || '#2a344a') + ', #101420)'
                     });
                 }

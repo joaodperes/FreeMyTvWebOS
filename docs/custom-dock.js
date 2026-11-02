@@ -42,7 +42,8 @@
             icon.appendChild(fb2);
             var logo = APP_LOGOS[app.id];
             if (logo || app.iconUrl)
-                addTileImage(icon, logo ? 'assets/brands/' + logo + '.svg' : app.iconUrl, !!logo);
+                addTileImage(icon, logo ? 'assets/brands/' + logo + '.svg' : app.iconUrl,
+                    !!logo, logo ? [] : (app.iconCandidates || []));
         }
         button.appendChild(icon);
     }
