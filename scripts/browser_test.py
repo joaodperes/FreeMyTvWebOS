@@ -60,7 +60,10 @@ setTimeout(function () {
     wallpaperSupported: typeof applyCustomBackground === 'function'
   };
   out.dock = {
-    allPinned: document.querySelectorAll('#appsGrid .app-tile:not(.more-tile)').length === getDockApps().length,
+    allPinned: document.querySelectorAll('#appsGrid .app-tile:not(.more-tile)').length ===
+      state.favorites.filter(function(id) {
+        return state.catalog.some(function(app) { return app.id === id; });
+      }).length,
     moreTile: !!document.getElementById('moreAppsBtn'),
     unifiedSettings: !!document.getElementById('pinnedOrderList') && !document.getElementById('cfgDock4')
   };

@@ -150,6 +150,9 @@
     }
     document.addEventListener('keydown', function (e) {
         if (!drawerOpen) return;
+        // Capture-phase navigation bypasses the original key listener, so
+        // maintain its OLED screensaver activity timestamp ourselves.
+        window.lastActivity = Date.now();
         if (e.keyCode === 461 || e.key === 'Escape' || e.key === 'GoBack') closeDrawer();
         else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
                  e.key === 'ArrowUp' || e.key === 'ArrowDown') moveCard(e.key);
@@ -161,6 +164,54 @@
         e.stopImmediatePropagation();
     }, true);
     document.getElementById('closeAllAppsBtn').addEventListener('click', closeDrawer);
+
+    // Upgrade old four-slot preferences without replacing the user's
+    // existing favorites. This happens once, after app discovery if possible.
+    function migratePreviousDock() {
+        if (localStorage.getItem('fmtv_dock_migrated_v2') === 'done') return;
+        var old = null;
+        try { old = JSON.parse(localStorage.getItem('fmtv_dock_slots') || 'null'); }
+        catch (e) {}
+        if (Array.isArray(old)) {
+            var preferred = [];
+            old.forEach(function(token) {
+                var app = getApp(token);
+                if (!app && token === 'auto-apple-tv') {
+                    app = state.catalog.filter(function(entry) {
+                        return /^apple tv/i.test(entry.title || '') ||
+                               /appletv/i.test(entry.id || '');
+                    })[0];
+                }
+                if (!app && token === 'auto-switch') {
+                    app = state.catalog.filter(function(entry) {
+                        return isHDMI(entry) && state.hdmiDevices[entry.id] === 'switch';
+                    })[0];
+                }
+                if (app && preferred.indexOf(app.id) === -1) preferred.push(app.id);
+            });
+            if (preferred.length) {
+                state.favorites = preferred.concat(state.favorites.filter(function(id) {
+                    return preferred.indexOf(id) === -1;
+                }));
+                try { localStorage.setItem('fmtv_favorites', JSON.stringify(state.favorites)); }
+                catch (e) {}
+            }
+        }
+        try { localStorage.setItem('fmtv_dock_migrated_v2', 'done'); }
+        catch (e) {}
+    }
+    var nativeAddLaunchPoints = window.addLaunchPoints;
+    if (typeof nativeAddLaunchPoints === 'function') {
+        window.addLaunchPoints = function(points) {
+            nativeAddLaunchPoints(points);
+            migratePreviousDock();
+            dockRender();
+        };
+    }
+    setTimeout(function() {
+        migratePreviousDock();
+        dockRender();
+    }, 5000);
 
     window.renderAppsShelf = dockRender;
     dockRender();
