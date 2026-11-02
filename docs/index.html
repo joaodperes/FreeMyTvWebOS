@@ -1085,7 +1085,8 @@
         .shelf-grid { max-width: 100%; width: auto; box-sizing: border-box;
             justify-content: flex-start; overflow-x: auto; overflow-y: hidden;
             flex-wrap: nowrap; scroll-behavior: smooth; scrollbar-width: none;
-            scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
+            scroll-snap-type: x mandatory; scroll-padding-left: 11px;
+            overscroll-behavior-x: contain; }
         .shelf-grid .app-tile { scroll-snap-align: start; }
         .shelf-grid::-webkit-scrollbar { display: none; }
         .shelf-grid .app-tile { flex-shrink: 0; }
@@ -1501,7 +1502,7 @@
         // Desktop-only visual preview. Browsers cannot query installed webOS
         // applications; ?preview=1 adds a clearly labelled mock Apple TV tile.
         // No simulated application ID or preference is ever saved on the TV.
-        if (!window.webOS && /(?:\\?|&)preview=1(?:&|$)/.test(window.location.search)) {
+        if (!window.webOS && window.location.search.indexOf('preview=1') !== -1) {
             var example = { id: 'preview.apple-tv', title: 'Apple TV (preview)',
                 tag: 'Preview only', desc: 'Illustration only; TV apps are detected on webOS.',
                 color: '#dce4ed', badge: 'TV', bg: 'linear-gradient(135deg,#222,#090909)' };
@@ -2855,6 +2856,8 @@
             if (cancel && pinMoveSnapshot) tempFavorites = pinMoveSnapshot.slice();
             pinMoveId = null;
             pinMoveSnapshot = null;
+            suppressPinClick = false;
+            pinMouseHeld = null;
             refreshPinGrid(target);
         }
         function reorderPinTo(id, targetId) {

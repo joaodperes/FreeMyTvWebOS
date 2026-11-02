@@ -61,6 +61,8 @@ setTimeout(function () {
     wallpaperSupported: typeof applyCustomBackground === 'function'
   };
   out.dock = {
+    desktopPreview: window.location.search.indexOf('preview=1') === -1 ||
+      !!document.querySelector('#appsGrid .app-tile[data-id="preview.apple-tv"]'),
     allPinned: document.querySelectorAll('#appsGrid .app-tile:not(.more-tile)').length ===
       state.favorites.filter(function(id) {
         return state.catalog.some(function(app) { return app.id === id; });
@@ -113,6 +115,22 @@ setTimeout(function () {
     tempFavorites[1] === before && !!pinItemById(before).classList.contains('pin-moving');
   finishPinMove(false);
   out.dock.reorders = out.dock.reorders && !pinMoveId;
+  var favoriteBeforeOverflow = state.favorites.slice();
+  state.favorites = tempFavorites.slice();
+  renderAppsShelf();
+  var dockOverflow = document.getElementById('appsGrid');
+  var tileCount = dockOverflow.querySelectorAll('.app-tile').length;
+  var visibleTileCount = Number(dockOverflow.getAttribute('data-visible-tiles'));
+  var dockStyle = getComputedStyle(dockOverflow);
+  var tileWidth = dockOverflow.querySelector('.app-tile').getBoundingClientRect().width;
+  var step = Number(dockOverflow.getAttribute('data-tile-step'));
+  var usedWidth = visibleTileCount * tileWidth + (visibleTileCount - 1) * (step-tileWidth) +
+    parseFloat(dockStyle.paddingLeft) + parseFloat(dockStyle.paddingRight) +
+    parseFloat(dockStyle.borderLeftWidth) + parseFloat(dockStyle.borderRightWidth);
+  out.dock.overflowsInWholeTiles = visibleTileCount < tileCount &&
+    Math.abs(dockOverflow.getBoundingClientRect().width - usedWidth) < 2;
+  state.favorites = favoriteBeforeOverflow;
+  renderAppsShelf();
   tempFavorites = originalPins;
   refreshPinGrid();
 
@@ -164,7 +182,7 @@ def find_chrome(explicit):
     return None
 
 
-def run_language(chrome, lang, workdir):
+def run_language(chrome, lang, workdir, demo=False):
     with open(APP, encoding="utf-8") as f:
         html = f.read()
     html = html.replace("<head>", f'<head>{ERROR_HOOK}<script>localStorage.setItem("fmtv_lang","{lang}")</script>', 1)
@@ -177,7 +195,7 @@ def run_language(chrome, lang, workdir):
     res = subprocess.run(
         [chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1920,1080",
          "--virtual-time-budget=6000", f"--user-data-dir={os.path.join(workdir, 'profile_' + lang)}",
-         "--dump-dom", f"file://{page}"],
+         "--dump-dom", f"file://{page}" + ("?preview=1" if demo else "")],
         capture_output=True, text=True, timeout=120)
     m = re.search(r'<pre id="__result">(.*?)</pre>', res.stdout, re.S)
     if not m:
@@ -221,6 +239,14 @@ def main():
                 if result["missing"]:
                     failures.append(f"strings without translations: {result['missing']}")
             print(f"[*] {lang}: ok" if not any(x.startswith(lang + ":") for x in failures) else f"[!] {lang}: failed")
+    # The browser can't discover LG-installed apps. Verify opt-in PC preview
+    # displays its clearly marked placeholder without affecting TV discovery.
+    preview, stderr = run_language(chrome, "en", workdir, demo=True)
+    if preview is None:
+        failures.append(f"desktop preview: page did not finish ({stderr.strip()})")
+    elif preview.get("probeCrash") or not preview.get("dock", {}).get("desktopPreview"):
+        failures.append(f"desktop preview: {preview.get('probeCrash', preview.get('dock'))}")
+
     for f in failures:
         print(f"[!] {f}")
     print("[+] browser tests passed" if not failures else f"[!] {len(failures)} problem(s)")
