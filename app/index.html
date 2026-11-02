@@ -3099,10 +3099,16 @@
                 event.preventDefault(); event.stopImmediatePropagation();
                 return;
             }
-            if (!inGrid || key !== 'Enter') return;
-            if (!pinEnterDown || Date.now() - pinEnterAt > 450) active.click();
+            if (key !== 'Enter') return;
+            // Also guard the Reorder and Save buttons against held-OK repeat.
+            if (pinEnterDown && (event.repeat || Date.now() - pinEnterAt < 800)) {
+                event.preventDefault(); event.stopImmediatePropagation();
+                return;
+            }
             pinEnterDown = true;
             pinEnterAt = Date.now();
+            if (!inGrid) return; // Let the standard modal handler activate this once.
+            active.click();
             event.preventDefault(); event.stopImmediatePropagation();
         }, true);
         document.addEventListener('keyup', function(event) {
