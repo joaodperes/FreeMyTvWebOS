@@ -66,7 +66,19 @@ setTimeout(function () {
         return state.catalog.some(function(app) { return app.id === id; });
       }).length,
     moreTile: !!document.getElementById('moreAppsBtn'),
-    unifiedSettings: !!document.getElementById('pinnedOrderList') && !document.getElementById('cfgDock4')
+    unifiedSettings: !document.getElementById('pinnedOrderList') && !document.getElementById('cfgDock4'),
+    fullTiles: (function() {
+      var g=document.getElementById('appsGrid');
+      var tiles=g.querySelectorAll('.app-tile');
+      var count=Number(g.getAttribute('data-visible-tiles'));
+      var step=Number(g.getAttribute('data-tile-step'));
+      return count > 0 && count <= tiles.length && step > 0 &&
+        Math.abs(g.getBoundingClientRect().width -
+            (count * tiles[0].getBoundingClientRect().width +
+            (count - 1) * (step - tiles[0].getBoundingClientRect().width) +
+            parseFloat(getComputedStyle(g).paddingLeft) + parseFloat(getComputedStyle(g).paddingRight) +
+            parseFloat(getComputedStyle(g).borderLeftWidth) + parseFloat(getComputedStyle(g).borderRightWidth))) < 2;
+    })()
   };
   document.getElementById('moreAppsBtn').click();
   var moreOpened = document.getElementById('allAppsDrawer').classList.contains('active');
@@ -82,31 +94,28 @@ setTimeout(function () {
   if (state.catalog.some(function(item) { return item.id === 'skyshowtime.test'; })) out.hiddenApps.push('SkyShowtime discovery');
   if (!state.catalog.some(function(item) { return item.id === 'future.streaming'; })) out.hiddenApps.push('Future app discovery');
   document.getElementById('customizeBtn').click();
-  // Regression: selecting more than twelve apps must work, with ordering
-  // controls available through the same focusable settings menu.
+  // Regression: >12 pins, in-grid pick-up/reorder, and no second ordering UI.
   var originalPins = tempFavorites.slice();
-  var pinnedCatalog = state.catalog.filter(function(x) { return x.id.indexOf('preview.test.') === 0; });
-  for (var n = pinnedCatalog.length; n < 14; n++) {
+  for (var n = 0; n < 14; n++) {
     var id = 'preview.test.' + n;
-    var extra = {id:id,title:'Test App '+n,tag:'Installed App',
-                 desc:'Test',bg:'#333',color:'#333'};
-    state.catalog.push(extra);
+    if (!state.catalog.some(function(x) { return x.id === id; }))
+      state.catalog.push({id:id, title:'Test App '+n, tag:'Installed App',
+                          desc:'Test', color:'#333', badge:'X',bg:'#333'});
   }
   tempFavorites = state.catalog.filter(function(x) { return x.id.indexOf('preview.test.') === 0; })
     .map(function(x) { return x.id; });
   renderAppSelectorGrid();
-  renderPinnedOrderList();
-  out.dock.moreThan12 = tempFavorites.length === 14 &&
-    document.querySelectorAll('#pinnedOrderList .pinned-order-row').length === 14;
-  var moveRight = document.querySelector('#pinnedOrderList .pin-move[data-direction="1"]');
-  var oldFirst = tempFavorites[0];
-  moveRight.click();
-  out.dock.reorders = tempFavorites[1] === oldFirst &&
-    !!document.querySelector('#pinnedOrderList .pin-move.focused');
-  tempFavorites = originalPins;
-  renderAppSelectorGrid();
-  renderPinnedOrderList();
   refreshModalNavList();
+  out.dock.moreThan12 = tempFavorites.length === 14 &&
+    document.querySelectorAll('#appSelectorGrid .app-toggle-item.selected').length === 14;
+  var before = tempFavorites[0];
+  out.dock.reorders = beginPinMove(before) && movePin(1) &&
+    tempFavorites[1] === before && !!pinItemById(before).classList.contains('pin-moving');
+  finishPinMove(false);
+  out.dock.reorders = out.dock.reorders && !pinMoveId;
+  tempFavorites = originalPins;
+  refreshPinGrid();
+
   var bgPicker = document.getElementById('cfgBackgroundFile');
   out.background.focusable = !bgPicker.disabled && modalNavItems.indexOf(bgPicker) !== -1;
   setModalFocus(document.getElementById('cfgBackgroundEnabled'));

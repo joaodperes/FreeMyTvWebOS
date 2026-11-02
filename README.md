@@ -68,11 +68,11 @@ GitHub Actions `CI` also automatically builds and uploads a tested installable I
 
 ## Custom branch — scrolling wallpaper-first dock
 
-Home displays **every app you pin**, followed by a final **••• All apps** tile. The dock is a single row near the bottom; left/right on the remote automatically scrolls the strip to keep the focused tile visible. The wallpaper, date/time and gear remain unobstructed. App names are hidden on the main dock, but shown in the All apps drawer for clarity.
+Home displays **every app you pin**, followed by a final **••• All apps** tile. The dock is a single row near the bottom; left/right on the remote automatically scrolls the strip to keep the focused tile visible. Its viewport expands to fit entire tiles within the screen width, and scrolls one complete tile at a time if there are more apps; it never cuts an icon in half. The wallpaper, date/time and gear remain unobstructed. App names are hidden on the main dock, but shown in the All apps drawer for clarity.
 
-Open **⚙ Customize → Apps pinned to dock** to add/remove any number of shortcuts (no 12-app limit). Use the **Pinned order** ◀ / ▶ buttons to change their position. There are no separate Dock 1–4 dropdowns or bulky 12-tile reordering screen. The **•••** drawer lists the remaining detected installed apps, plus HDMI and USB Media Player shortcuts. Back closes the drawer without leaving Home.
+Open **⚙ Customize → Apps pinned to dock** to add/remove any number of shortcuts (no 12-app limit). Tap **OK** to pin/unpin; **hold OK for 600 ms on a pinned app** to pick it up, move it with Left/Right, then press OK to place (Back cancels). On a PC, drag and drop pinned apps to reorder them, then click **Save & Apply** to persist the order in that browser. The separate Pinned order list and Dock 1–4 dropdowns are removed. The **•••** drawer lists the remaining detected installed apps, plus HDMI and USB Media Player shortcuts. Back closes the drawer without leaving Home.
 
-Existing local favorites, HDMI device assignments, your background image/dimming, language, clock and other display settings are kept. The excluded app titles remain excluded. The older four-slot settings are deprecated.
+Existing local favorites, HDMI device assignments, your background image/dimming, language, clock and other display settings are kept. The excluded app titles remain excluded. A desktop browser cannot list the apps installed on the TV. To preview an Apple TV placeholder locally, append `?preview=1` to the page URL; it is marked as preview-only, cannot launch, and is never added on webOS. Actual Apple TV appears only once the TV's native app discovery returns its launch point. The older four-slot settings are deprecated.
 
 **SSH installation:** The installer remembers TVs that reject forced PTY allocation in `~/.ssh/webos_tv_pty_support.json`. Delete this file if you need to re-detect the TV's terminal capabilities.
 

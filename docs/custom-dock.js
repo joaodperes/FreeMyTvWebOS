@@ -71,10 +71,42 @@
         });
         btn.addEventListener('click', function () {
             if (!dockTile) closeDrawer();
+            if (app.id.indexOf('preview.') === 0) {
+                showToast('Preview only — installed apps are discovered on your LG TV.');
+                return;
+            }
             launchApp(app.id);
         });
         return btn;
     }
+    // Size to an integer number of tiles: never crop half a tile or •••.
+    // Use all available horizontal space, but leave the wallpaper margins.
+    function resizeDock() {
+        var grid = document.getElementById('appsGrid');
+        if (!grid || shelfEdit) return;
+        var items = grid.querySelectorAll('.app-tile');
+        if (!items.length) return;
+        var first = items[0], computed = window.getComputedStyle(grid);
+        var tileWidth = first.getBoundingClientRect().width || first.offsetWidth || 150;
+        var gap = parseFloat(computed.columnGap || computed.gap) || 12;
+        var padding = (parseFloat(computed.paddingLeft) || 0) +
+                      (parseFloat(computed.paddingRight) || 0);
+        var borders = (parseFloat(computed.borderLeftWidth) || 0) +
+                      (parseFloat(computed.borderRightWidth) || 0);
+        var chrome = padding + borders;
+        var limit = Math.max(tileWidth + chrome + 2, window.innerWidth - 64);
+        var fit = Math.max(1, Math.floor((limit - chrome + gap) / (tileWidth + gap) + 0.00001));
+        var visible = Math.min(items.length, fit);
+        var width = Math.ceil(visible * tileWidth + (visible - 1) * gap + chrome);
+        grid.style.width = width + 'px';
+        grid.setAttribute('data-visible-tiles', String(visible));
+        grid.setAttribute('data-tile-step', String(tileWidth + gap));
+        // If the window is resized, align the current offset to a tile edge.
+        var firstVisible = Math.round(grid.scrollLeft / (tileWidth + gap));
+        grid.scrollLeft = Math.min(firstVisible, items.length - visible) * (tileWidth + gap);
+    }
+    window.addEventListener('resize', resizeDock);
+
     function dockRender() {
         if (shelfEdit) { oldRender(); return; } // preserve original 12-app reorder UI
         var grid = document.getElementById('appsGrid');
@@ -94,8 +126,7 @@
         more.addEventListener('mouseenter', function () { setMainFocus(more); });
         more.addEventListener('click', openDrawer);
         grid.appendChild(more);
-        var maxWidth = Math.min(1080, window.innerWidth - 72);
-        grid.style.width = Math.min(maxWidth, (pins.length + 1) * 162 + 18) + 'px';
+        resizeDock();
         refreshMainNavList();
     }
     function focusCard(btn) {

@@ -1072,24 +1072,21 @@
 
         /* One pinned list: the dock is the source of truth, with horizontal scroll. */
         .pin-help { color: var(--text-secondary); font-size: 13px; margin: 0 0 11px; }
-        .pinned-order-list { max-height: 186px; overflow-y: auto; padding: 5px;
-            display: flex; flex-direction: column; gap: 7px; }
-        .pinned-order-row { display: flex; align-items: center; gap: 9px;
-            min-height: 43px; border-radius: 11px; padding: 6px 9px;
-            border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.045); }
-        .pinned-order-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap;
-            text-overflow: ellipsis; font-size: 14px; }
-        .pin-move { height: 38px; flex: 0 0 47px; border-radius: 10px;
-            border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.09);
-            color: white; cursor: pointer; font-size: 19px; }
-        .pin-move.focused,.pin-move:focus,.pin-move:hover { border-color: white;
-            outline: 2px solid rgba(255,255,255,.65); background: rgba(255,255,255,.18); }
-        .pin-move[aria-disabled="true"] { opacity: .35; }
-        .shelf-wrapper { max-width: min(1080px, calc(100vw - 72px)); }
+        .app-toggle-item.pin-moving {
+            border-color: #8fd9ff !important;
+            box-shadow: 0 0 0 2px rgba(143,217,255,.70), 0 0 16px rgba(143,217,255,.45);
+            background: rgba(42,96,129,.4);
+        }
+        .app-toggle-item.pin-moving:after {
+            content: "↔"; font-size: 20px; font-weight: 700;
+            color: #b5eaff;
+        }
+        .shelf-wrapper { max-width: calc(100vw - 64px); }
         .shelf-grid { max-width: 100%; width: auto; box-sizing: border-box;
             justify-content: flex-start; overflow-x: auto; overflow-y: hidden;
             flex-wrap: nowrap; scroll-behavior: smooth; scrollbar-width: none;
-            overscroll-behavior-x: contain; }
+            scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
+        .shelf-grid .app-tile { scroll-snap-align: start; }
         .shelf-grid::-webkit-scrollbar { display: none; }
         .shelf-grid .app-tile { flex-shrink: 0; }
         .shelf-grid .app-tile:nth-child(n+13) { display: flex; }
@@ -1192,15 +1189,14 @@
         <div class="modal-box">
             <div class="modal-header">
                 <div class="modal-title">Customize dock</div>
-                <div style="font-size: 13px; color: var(--text-secondary);">Arrows: move • OK: edit • Back: done / close</div>
+                <div style="font-size: 13px; color: var(--text-secondary);">OK: pin · Hold OK: reorder · Back: close</div>
             </div>
 
             <div>
                 <div class="modal-section-title">1. Apps pinned to dock</div>
                 <p class="pin-help">Add as many apps as you like. Move along the dock with the remote; ••• shows unpinned apps.</p>
                 <div class="app-selector-grid" id="appSelectorGrid"></div>
-                <div class="modal-section-title" style="margin-top:16px;">Pinned order</div>
-                <div class="pinned-order-list" id="pinnedOrderList"></div>
+                <p class="pin-help" id="pinMoveHelp">OK: pin/unpin · Hold OK on pinned app: pick up · ◀ ▶: move · OK: place</p>
 
             </div>
 
@@ -1501,6 +1497,17 @@
             isSunset: false,
             isNight: true
         };
+
+        // Desktop-only visual preview. Browsers cannot query installed webOS
+        // applications; ?preview=1 adds a clearly labelled mock Apple TV tile.
+        // No simulated application ID or preference is ever saved on the TV.
+        if (!window.webOS && /(?:\\?|&)preview=1(?:&|$)/.test(window.location.search)) {
+            var example = { id: 'preview.apple-tv', title: 'Apple TV (preview)',
+                tag: 'Preview only', desc: 'Illustration only; TV apps are detected on webOS.',
+                color: '#dce4ed', badge: 'TV', bg: 'linear-gradient(135deg,#222,#090909)' };
+            state.catalog.push(example);
+            if (state.favorites.indexOf(example.id) < 0) state.favorites.push(example.id);
+        }
 
         // Remove an excluded favorite without touching other saved app choices.
         function removeHiddenFavorite(appId) {
@@ -2666,10 +2673,15 @@
             curIndex = mainNavItems.indexOf(item);
             var dock = document.getElementById('appsGrid');
             if (!shelfEdit && dock && dock.contains(item)) {
-                var a = item.getBoundingClientRect();
-                var b = dock.getBoundingClientRect();
-                if (a.right > b.right - 15) dock.scrollLeft += a.right - b.right + 23;
-                else if (a.left < b.left + 15) dock.scrollLeft -= b.left - a.left + 23;
+                var tiles = toArray(dock.querySelectorAll('.app-tile'));
+                var at = tiles.indexOf(item);
+                var visible = Number(dock.getAttribute('data-visible-tiles')) || tiles.length;
+                var step = Number(dock.getAttribute('data-tile-step')) || 162;
+                var first = Math.round(dock.scrollLeft / step);
+                if (at < first) first = at;
+                else if (at >= first + visible) first = at - visible + 1;
+                first = Math.max(0, Math.min(first, Math.max(0, tiles.length - visible)));
+                dock.scrollLeft = first * step;
             }
 
             heroTag.textContent = t(item.dataset.tag || 'Selection');
@@ -2766,7 +2778,6 @@
             findAvailableBackgrounds();
 
             renderAppSelectorGrid();
-            renderPinnedOrderList();
             settingsModal.classList.add('active');
             refreshModalNavList();
         }
@@ -2794,91 +2805,201 @@
         }
 
         function closeSettingsModal() {
+            pinPressId = null; cancelPinHold();
+            if (pinMoveId) finishPinMove(true);
             endModalSelectEditing();
             modalOpen = false;
             settingsModal.classList.remove('active');
             setMainFocus(mainNavItems[curIndex]);
         }
 
+        var pinMoveId = null, pinMoveSnapshot = null;
+        var pinHoldTimer = null, pinPressId = null, pinMouseHeld = null;
+        var suppressPinClick = false, dragPinId = null;
+        function pinItemById(id) {
+            return toArray(document.querySelectorAll('#appSelectorGrid .app-toggle-item')).filter(function(el) {
+                return el.getAttribute('data-app-id') === id;
+            })[0];
+        }
+        function refreshPinGrid(focusId) {
+            var previousId = focusId || (modalNavItems[modalIndex] &&
+                modalNavItems[modalIndex].getAttribute('data-app-id'));
+            renderAppSelectorGrid();
+            refreshModalNavList();
+            if (previousId) {
+                var el = pinItemById(previousId);
+                if (el) setModalFocus(el);
+            }
+        }
+        function beginPinMove(id) {
+            if (tempFavorites.indexOf(id) < 0 || !modalOpen) return false;
+            pinMoveId = id;
+            pinMoveSnapshot = tempFavorites.slice();
+            refreshPinGrid(id);
+            showToast('Move with ◀ ▶, then OK to place; Back cancels', 2800);
+            return true;
+        }
+        function movePin(delta) {
+            if (!pinMoveId) return false;
+            var from = tempFavorites.indexOf(pinMoveId);
+            var to = Math.max(0, Math.min(tempFavorites.length - 1, from + delta));
+            if (from === to) return false;
+            tempFavorites.splice(from, 1);
+            tempFavorites.splice(to, 0, pinMoveId);
+            refreshPinGrid(pinMoveId);
+            return true;
+        }
+        function finishPinMove(cancel) {
+            if (!pinMoveId) return;
+            var target = pinMoveId;
+            if (cancel && pinMoveSnapshot) tempFavorites = pinMoveSnapshot.slice();
+            pinMoveId = null;
+            pinMoveSnapshot = null;
+            refreshPinGrid(target);
+        }
+        function reorderPinTo(id, targetId) {
+            var from = tempFavorites.indexOf(id);
+            var to = tempFavorites.indexOf(targetId);
+            if (from < 0 || to < 0 || from === to) return false;
+            tempFavorites.splice(from, 1);
+            tempFavorites.splice(to, 0, id);
+            refreshPinGrid(id);
+            return true;
+        }
+        function togglePin(id) {
+            if (pinMoveId) return;
+            var index = tempFavorites.indexOf(id);
+            if (index >= 0) {
+                if (tempFavorites.length === 1) {
+                    showToast('Keep at least one pinned app');
+                    return;
+                }
+                tempFavorites.splice(index, 1);
+            } else tempFavorites.push(id);
+            refreshPinGrid(id);
+        }
+        function cancelPinHold() {
+            if (pinHoldTimer !== null) clearTimeout(pinHoldTimer);
+            pinHoldTimer = null;
+        }
         function renderAppSelectorGrid() {
             var container = document.getElementById('appSelectorGrid');
             var previousScroll = container.scrollTop;
             container.innerHTML = '';
-
+            var chosen = {};
+            var sorted = [];
+            tempFavorites.forEach(function(id) {
+                var found = arrFind(state.catalog, function(app) { return app.id === id; });
+                if (found && !chosen[id]) { sorted.push(found); chosen[id] = true; }
+            });
             state.catalog.forEach(function(app) {
-                var isSelected = tempFavorites.indexOf(app.id) !== -1;
+                if (!chosen[app.id]) sorted.push(app);
+            });
+            sorted.forEach(function(app) {
+                var isPinned = tempFavorites.indexOf(app.id) !== -1;
                 var item = document.createElement('div');
-                item.className = 'app-toggle-item modal-nav' + (isSelected ? ' selected' : '');
+                item.className = 'app-toggle-item modal-nav' +
+                    (isPinned ? ' selected' : '') +
+                    (pinMoveId === app.id ? ' pin-moving' : '');
                 item.tabIndex = 0;
                 item.setAttribute('data-app-id', app.id);
-                // Installed app titles come from listLaunchPoints, so they are set as text.
-                var titleSpan = document.createElement('span');
-                titleSpan.textContent = app.title;
-                var markSpan = document.createElement('span');
-                markSpan.textContent = isSelected ? '✓' : '+';
-                item.appendChild(titleSpan);
-                item.appendChild(markSpan);
-
-                item.addEventListener('click', function() {
-                    var idx = tempFavorites.indexOf(app.id);
-                    if (idx !== -1) {
-                        if (tempFavorites.length > 1) tempFavorites.splice(idx, 1);
-                    } else {
-                        tempFavorites.push(app.id);
+                item.setAttribute('role', 'button');
+                item.setAttribute('aria-pressed', String(isPinned));
+                if (isPinned) item.setAttribute('draggable', 'true');
+                var title = document.createElement('span');
+                title.textContent = app.title;
+                var marker = document.createElement('span');
+                marker.textContent = isPinned ? '✓' : '+';
+                item.appendChild(title); item.appendChild(marker);
+                item.addEventListener('click', function(event) {
+                    if (suppressPinClick || pinMoveId) {
+                        suppressPinClick = false;
+                        event.preventDefault();
+                        return;
                     }
-                    renderAppSelectorGrid();
-                    renderPinnedOrderList();
-                    refreshModalNavList();
-                    var current = toArray(container.querySelectorAll('.app-toggle-item')).filter(function(el) {
-                        return el.getAttribute('data-app-id') === app.id;
-                    })[0];
-                    if (current) setModalFocus(current);
+                    togglePin(app.id);
                 });
+                item.addEventListener('mousedown', function(event) {
+                    if (!isPinned || event.button !== 0 || pinMoveId) return;
+                    pinMouseHeld = app.id;
+                    cancelPinHold();
+                    pinHoldTimer = setTimeout(function() {
+                        if (pinMouseHeld === app.id) {
+                            pinMouseHeld = null;
+                            suppressPinClick = true;
+                            beginPinMove(app.id);
+                        }
+                    }, 600);
+                });
+                item.addEventListener('mouseup', function() { pinMouseHeld = null; cancelPinHold(); });
+                item.addEventListener('mouseleave', function() { pinMouseHeld = null; cancelPinHold(); });
+                item.addEventListener('dragstart', function(event) {
+                    if (!isPinned || !event.dataTransfer) return event.preventDefault();
+                    pinMouseHeld = null;
+                    cancelPinHold();
+                    dragPinId = app.id;
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', app.id);
+                });
+                item.addEventListener('dragover', function(event) {
+                    if (isPinned && dragPinId) event.preventDefault();
+                });
+                item.addEventListener('drop', function(event) {
+                    if (!isPinned || !dragPinId) return;
+                    event.preventDefault();
+                    reorderPinTo(dragPinId, app.id);
+                    dragPinId = null;
+                });
+                item.addEventListener('dragend', function() { dragPinId = null; });
                 container.appendChild(item);
             });
             container.scrollTop = previousScroll;
         }
 
-        function renderPinnedOrderList() {
-            var list = document.getElementById('pinnedOrderList');
-            list.innerHTML = '';
-            tempFavorites.forEach(function(id, index) {
-                var app = arrFind(state.catalog, function(entry) { return entry.id === id; });
-                if (!app) return;
-                var row = document.createElement('div');
-                row.className = 'pinned-order-row';
-                var title = document.createElement('span');
-                title.className = 'pinned-order-name';
-                title.textContent = devicePreset(app, tempDevices).title || app.title;
-                row.appendChild(title);
-                [-1, 1].forEach(function(delta) {
-                    var btn = document.createElement('button');
-                    btn.className = 'pin-move modal-nav';
-                    btn.textContent = delta < 0 ? '◀' : '▶';
-                    btn.setAttribute('aria-label', 'Move ' + title.textContent +
-                        (delta < 0 ? ' left' : ' right'));
-                    btn.setAttribute('data-app-id', id);
-                    btn.setAttribute('data-direction', String(delta));
-                    if (index + delta < 0 || index + delta >= tempFavorites.length)
-                        btn.setAttribute('aria-disabled', 'true');
-                    btn.addEventListener('click', function() {
-                        var to = index + delta;
-                        if (to < 0 || to >= tempFavorites.length) return;
-                        tempFavorites.splice(index, 1);
-                        tempFavorites.splice(to, 0, id);
-                        renderPinnedOrderList();
-                        refreshModalNavList();
-                        var next = toArray(list.querySelectorAll('.pin-move')).filter(function(el) {
-                            return el.getAttribute('data-app-id') === id &&
-                                el.getAttribute('data-direction') === String(delta);
-                        })[0];
-                        if (next) setModalFocus(next);
-                    });
-                    row.appendChild(btn);
-                });
-                list.appendChild(row);
-            });
-        }
+        // Capture OK on app tiles before webOS's ordinary modal Enter handler.
+        // A short press toggles pinning; holding enters D-pad reorder mode.
+        document.addEventListener('keydown', function(event) {
+            if (!modalOpen) return;
+            var key = event.key || (event.keyCode === 13 ? 'Enter' : '');
+            var active = modalNavItems[modalIndex];
+            var inGrid = active && document.getElementById('appSelectorGrid').contains(active);
+            if (pinMoveId) {
+                if (key === 'ArrowLeft' || key === 'ArrowRight') {
+                    movePin(key === 'ArrowLeft' ? -1 : 1);
+                } else if (key === 'Enter') finishPinMove(false);
+                else if (event.keyCode === 461 || key === 'Escape' || key === 'GoBack')
+                    finishPinMove(true);
+                else return;
+                cancelPinHold(); pinPressId = null;
+                event.preventDefault(); event.stopImmediatePropagation();
+                return;
+            }
+            if (!inGrid || key !== 'Enter') return;
+            if (!pinPressId) {
+                pinPressId = active.getAttribute('data-app-id');
+                pinHoldTimer = setTimeout(function() {
+                    if (pinPressId) beginPinMove(pinPressId);
+                    pinPressId = null;
+                    pinHoldTimer = null;
+                }, 600);
+            }
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
+        document.addEventListener('keyup', function(event) {
+            var key = event.key || (event.keyCode === 13 ? 'Enter' : '');
+            if (key !== 'Enter' || !pinPressId) return;
+            var id = pinPressId;
+            pinPressId = null; cancelPinHold();
+            if (modalOpen && !pinMoveId) togglePin(id);
+            event.preventDefault(); event.stopImmediatePropagation();
+        }, true);
+        // Reset pending hold if focus leaves the tile or Customize closes.
+        document.addEventListener('keyup', function(event) {
+            if (event.key === 'Escape' || event.keyCode === 461) {
+                pinPressId = null; cancelPinHold();
+            }
+        }, true);
 
         function refreshModalNavList() {
             modalNavItems = toArray(settingsModal.querySelectorAll('.modal-nav:not(:disabled)')).filter(function(el) {
@@ -2905,13 +3026,6 @@
                 if (a.bottom > g.bottom - 6) grid.scrollTop += a.bottom - g.bottom + 12;
                 else if (a.top < g.top + 6) grid.scrollTop -= g.top - a.top + 12;
             }
-            var pinned = document.getElementById('pinnedOrderList');
-            if (pinned.contains(el)) {
-                var pb = el.getBoundingClientRect();
-                var pr = pinned.getBoundingClientRect();
-                if (pb.bottom > pr.bottom - 5) pinned.scrollTop += pb.bottom - pr.bottom + 12;
-                else if (pb.top < pr.top + 5) pinned.scrollTop -= pr.top - pb.top + 12;
-            }
             var panel = settingsModal.querySelector('.modal-box');
             var r = el.getBoundingClientRect();
             var p = panel.getBoundingClientRect();
@@ -2923,20 +3037,6 @@
             var active = modalNavItems[modalIndex];
             if (!active) return;
             var grid = document.getElementById('appSelectorGrid');
-            var pinned = document.getElementById('pinnedOrderList');
-            if (pinned.contains(active)) {
-                var orderButtons = toArray(pinned.querySelectorAll('.pin-move'));
-                var at = orderButtons.indexOf(active);
-                var jump = direction === 'down' ? 2 : direction === 'up' ? -2 :
-                    direction === 'right' ? 1 : -1;
-                var dest = at + jump;
-                if (dest >= 0 && dest < orderButtons.length &&
-                    ((direction !== 'left' && direction !== 'right') ||
-                     Math.floor(dest / 2) === Math.floor(at / 2))) {
-                    setModalFocus(orderButtons[dest]);
-                    return;
-                }
-            }
             if (grid.contains(active)) {
                 var buttons = toArray(grid.querySelectorAll('.modal-nav'));
                 var idx = buttons.indexOf(active);
@@ -3128,7 +3228,6 @@
             document.getElementById('cfgBackgroundDim').value = 'medium';
             document.getElementById('cfgBackgroundFile').value = 'background.jpg';
             renderAppSelectorGrid();
-            renderPinnedOrderList();
             refreshModalNavList();
             showToast(t('Defaults restored'));
         });
