@@ -1003,7 +1003,7 @@
             background: rgba(19,25,37,.45);
             transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
         .app-tile:hover, .app-tile:focus, .app-tile.focused {
-            transform: translateY(-5px) scale(1.045);
+            transform: none;
             border-color: rgba(255,255,255,.97);
             box-shadow: 0 0 0 2px rgba(255,255,255,.70),
                 0 12px 33px rgba(0,0,0,.35), 0 0 22px rgba(255,207,230,.40);
@@ -1054,7 +1054,10 @@
             justify-content: center; gap: 7px; transition: transform .2s ease; }
         .all-app-card:hover, .all-app-card:focus, .all-app-card.focused {
             outline: 2px solid rgba(255,255,255,.95); outline-offset: 1px;
-            transform: scale(1.03); background: rgba(255,255,255,.15); }
+            transform: none; background: rgba(255,255,255,.15);
+            box-shadow: 0 0 0 2px rgba(255,255,255,.18), 0 8px 24px rgba(0,0,0,.24); }
+        .all-app-card .app-icon img { image-rendering: auto; transform: none !important; }
+        .all-app-card:focus .app-icon, .all-app-card.focused .app-icon { transform: none !important; }
         .all-app-card .app-icon { width: 65px; height: 64px; flex: none; border-radius: 12px; }
         .all-app-card .app-icon img.tile-brand-logo { width: 68%; height: 68%; }
         .all-app-card .app-art-fallback { font-size: 13px; padding: 4px; }
@@ -1094,6 +1097,50 @@
         @media (prefers-reduced-motion: reduce) {
             .shelf-grid { scroll-behavior: auto; }
             .app-tile { transition: none; }
+        }
+
+        /* Larger, quieter editor. One grid controls both pinning and ordering. */
+        #settingsModal { padding: 18px 32px; }
+        #settingsModal .modal-box { width: min(1510px, calc(100vw - 70px));
+            max-width:100%; max-height:94vh; padding:24px 35px; gap:14px; }
+        #settingsModal .app-selector-grid { grid-template-columns:repeat(6,minmax(0,1fr));
+            max-height:43vh; min-height:110px; gap:10px; }
+        #settingsModal .app-selector-grid .app-toggle-item { min-width:0; min-height:47px;
+            font-size:13px; padding:8px 11px; flex:0 0 calc((100% - 50px)/6); }
+        #settingsModal .modal-header { padding-bottom:10px; }
+        #settingsModal .modal-section-title { margin-bottom:8px; }
+        #settingsModal .field-group { flex-basis:calc((100% - 48px)/4); }
+        .pin-reorder-row { display:flex; justify-content:flex-end; margin-bottom:9px; }
+        .pin-reorder-btn { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.3);
+            color:#fff; border-radius:10px; padding:10px 20px; font-size:15px; cursor:pointer; }
+        .pin-reorder-btn.focused,.pin-reorder-btn:focus,.pin-reorder-btn.active {
+            border-color:#d4eeff; box-shadow:0 0 0 2px rgba(143,217,255,.55);
+            background:rgba(35,97,137,.36); }
+        .settings-confirm-backdrop { position:fixed; inset:0; z-index:800; display:none;
+            align-items:center; justify-content:center; background:rgba(0,0,0,.72); padding:24px; }
+        .settings-confirm-backdrop.active { display:flex; }
+        .settings-confirm-panel { width:min(540px,100%); background:rgba(24,30,46,.98);
+            border:1px solid rgba(255,255,255,.3); border-radius:22px; color:white;
+            padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+        .settings-confirm-title { font-size:23px; font-weight:650; margin-bottom:10px; }
+        .settings-confirm-desc { color:rgba(255,255,255,.8); margin-bottom:22px; font-size:15px; }
+        .settings-confirm-actions { display:flex; flex-wrap:wrap; gap:10px; }
+        .settings-confirm-actions button { flex:1; padding:12px 8px; color:white;
+            background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.3);
+            border-radius:12px; font-size:15px; cursor:pointer; }
+        .settings-confirm-actions button.focused,.settings-confirm-actions button:focus {
+            background:rgba(95,146,208,.35); outline:2px solid white; }
+        @media (max-width:1200px) {
+            #settingsModal .app-selector-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+            #settingsModal .app-selector-grid .app-toggle-item { flex-basis:calc((100% - 30px)/4); }
+            #settingsModal .field-group { flex-basis:calc((100% - 32px)/3); }
+        }
+        @media (max-width:800px) {
+            #settingsModal { padding:8px; }
+            #settingsModal .modal-box { width:100%; padding:16px; }
+            #settingsModal .app-selector-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+            #settingsModal .app-selector-grid .app-toggle-item { flex-basis:calc((100% - 20px)/3); }
+            #settingsModal .field-group { flex-basis:calc((100% - 16px)/2); }
         }
     </style>
     <script>
@@ -1190,20 +1237,17 @@
         <div class="modal-box">
             <div class="modal-header">
                 <div class="modal-title">Customize dock</div>
-                <div style="font-size: 13px; color: var(--text-secondary);">OK: pin · Hold OK: reorder · Back: close</div>
             </div>
 
             <div>
                 <div class="modal-section-title">1. Apps pinned to dock</div>
-                <p class="pin-help">Add as many apps as you like. Move along the dock with the remote; ••• shows unpinned apps.</p>
                 <div class="app-selector-grid" id="appSelectorGrid"></div>
-                <p class="pin-help" id="pinMoveHelp">OK: pin/unpin · Hold OK on pinned app: pick up · ◀ ▶: move · OK: place</p>
+                <div class="pin-reorder-row"><button type="button" class="pin-reorder-btn modal-nav" id="pinReorderBtn">Reorder pinned apps</button></div>
 
             </div>
 
             <div>
                 <div class="modal-section-title">2. HDMI Devices</div>
-                <p style="color: var(--text-secondary); margin: 0 0 12px;">Press a port to cycle its device. Save &amp; Apply to keep your choices.</p>
                 <div class="hdmi-options" id="hdmiOptions"></div>
             </div>
 
@@ -1297,6 +1341,18 @@
                 <button class="btn-secondary modal-nav" id="resetDefaultBtn">Reset Defaults</button>
                 <button class="btn-secondary modal-nav" id="closeModalBtn">Cancel</button>
                 <button class="btn-primary modal-nav" id="saveModalBtn">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-confirm-backdrop" id="settingsConfirm" role="dialog" aria-modal="true" aria-label="Unsaved settings">
+        <div class="settings-confirm-panel">
+            <div class="settings-confirm-title">Unsaved changes</div>
+            <div class="settings-confirm-desc">Save your changes before closing Customize?</div>
+            <div class="settings-confirm-actions">
+                <button id="confirmKeepEditing">Keep editing</button>
+                <button id="confirmDiscard">Discard</button>
+                <button id="confirmSave">Save &amp; exit</button>
             </div>
         </div>
     </div>
