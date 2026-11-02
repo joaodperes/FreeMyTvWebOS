@@ -1,57 +1,23 @@
 /* Minimal dock presentation; the existing webOS app launcher stays intact. */
 (function () {
     'use strict';
-    var defaults = ['netflix', 'spotify-beehive', 'auto-apple-tv', 'auto-switch'];
-    var slots = defaults.slice();
     var overlay = document.getElementById('allAppsDrawer');
     var drawerGrid = document.getElementById('allAppsGrid');
     var drawerOpen = false, cards = [], selected = 0;
     var oldRender = window.renderAppsShelf;
-    try {
-        var saved = JSON.parse(localStorage.getItem('fmtv_dock_slots') || 'null');
-        if (Array.isArray(saved) && saved.length === 4 &&
-            saved.every(function (s) { return typeof s === 'string'; })) slots = saved;
-    } catch (e) {}
-
     function getApp(id) {
         for (var i = 0; i < state.catalog.length; i++) {
             if (state.catalog[i].id === id) return state.catalog[i];
         }
         return null;
     }
-    function resolve(token) {
-        var i, app;
-        if (token === 'auto-apple-tv') {
-            for (i = 0; i < state.catalog.length; i++) {
-                app = state.catalog[i];
-                if (/^apple tv/i.test(app.title || '') || /appletv/i.test(app.id || '')) return app;
-            }
-            return null;
-        }
-        if (token === 'auto-switch') {
-            for (i = 0; i < state.catalog.length; i++) {
-                app = state.catalog[i];
-                if (isHDMI(app) && state.hdmiDevices[app.id] === 'switch') return app;
-            }
-            return null;
-        }
-        return getApp(token);
-    }
     function getDockApps() {
-        var found = [], used = {};
-        slots.forEach(function (token) {
-            var app = resolve(token);
-            if (app && !used[app.id]) { found.push(app); used[app.id] = true; }
+        var used = {}, pinned = [];
+        state.favorites.forEach(function(id) {
+            var app = getApp(id);
+            if (app && !used[id]) { used[id] = true; pinned.push(app); }
         });
-        state.favorites.concat(state.catalog.map(function (app) { return app.id; }))
-            .forEach(function (id) {
-                var app = getApp(id);
-                if (found.length < 4 && app && !used[id]) {
-                    found.push(app);
-                    used[id] = true;
-                }
-            });
-        return found.slice(0, 4);
+        return pinned;
     }
     function paint(app, button) {
         var icon = document.createElement('div');
@@ -113,7 +79,8 @@
         if (shelfEdit) { oldRender(); return; } // preserve original 12-app reorder UI
         var grid = document.getElementById('appsGrid');
         grid.innerHTML = '';
-        getDockApps().forEach(function (app) { grid.appendChild(tile(app, true)); });
+        var pins = getDockApps();
+        pins.forEach(function (app) { grid.appendChild(tile(app, true)); });
         var more = document.createElement('button');
         more.className = 'app-tile more-tile nav-item';
         more.id = 'moreAppsBtn';
@@ -127,6 +94,8 @@
         more.addEventListener('mouseenter', function () { setMainFocus(more); });
         more.addEventListener('click', openDrawer);
         grid.appendChild(more);
+        var maxWidth = Math.min(1080, window.innerWidth - 72);
+        grid.style.width = Math.min(maxWidth, (pins.length + 1) * 162 + 18) + 'px';
         refreshMainNavList();
     }
     function focusCard(btn) {
@@ -154,6 +123,8 @@
                 shown[id] = true;
                 var app = getApp(id);
                 if (!app) return;
+                if (state.installedAppIds && !state.installedAppIds[id] &&
+                    !isHDMI(app) && id !== 'com.webos.app.mediadiscovery') return;
                 var btn = tile(app, false);
                 drawerGrid.appendChild(btn);
                 cards.push(btn);
@@ -191,38 +162,6 @@
     }, true);
     document.getElementById('closeAllAppsBtn').addEventListener('click', closeDrawer);
 
-    function populateDockSettings() {
-        for (var i = 0; i < 4; i++) {
-            var picker = document.getElementById('cfgDock' + (i + 1));
-            picker.innerHTML = '';
-            if (i === 2 || i === 3) {
-                var special = document.createElement('option');
-                special.value = i === 2 ? 'auto-apple-tv' : 'auto-switch';
-                special.textContent = i === 2 ? 'Apple TV (auto)' : 'Nintendo Switch (configured HDMI)';
-                picker.appendChild(special);
-            }
-            state.catalog.forEach(function (app) {
-                var option = document.createElement('option');
-                option.value = app.id;
-                option.textContent = devicePreset(app, state.hdmiDevices).title || app.title;
-                picker.appendChild(option);
-            });
-            picker.value = slots[i];
-            if (picker.selectedIndex < 0) picker.selectedIndex = 0;
-        }
-    }
-    document.getElementById('customizeBtn').addEventListener('click', populateDockSettings);
-    document.getElementById('resetDefaultBtn').addEventListener('click', function () {
-        slots = defaults.slice();
-        populateDockSettings();
-    });
-    document.getElementById('saveModalBtn').addEventListener('click', function () {
-        slots = [];
-        for (var i = 0; i < 4; i++)
-            slots.push(document.getElementById('cfgDock' + (i + 1)).value);
-        try { localStorage.setItem('fmtv_dock_slots', JSON.stringify(slots)); } catch (e) {}
-        dockRender();
-    });
     window.renderAppsShelf = dockRender;
     dockRender();
 })();
