@@ -1871,6 +1871,15 @@
             });
         }
 
+        // USB Media Player description is part of the visible app catalog.
+        // Include it in every language to keep translation dictionaries aligned.
+        var usbMediaDesc = 'Browse media files on a connected USB drive or network media server.';
+        I18N.en[usbMediaDesc] = usbMediaDesc;
+        I18N.pt[usbMediaDesc] = 'Procurar ficheiros multimédia numa unidade USB ligada ou num servidor multimédia de rede.';
+        I18N.es[usbMediaDesc] = 'Explorar archivos multimedia en una unidad USB conectada o un servidor multimedia de red.';
+        I18N.de[usbMediaDesc] = 'Mediendateien auf einem angeschlossenen USB-Laufwerk oder Netzwerk-Medienserver durchsuchen.';
+        I18N.fr[usbMediaDesc] = 'Parcourir les médias sur un périphérique USB connecté ou un serveur multimédia réseau.';
+
         var LANG_LOCALES = { en: 'en-US', pt: 'pt-BR', es: 'es-ES', de: 'de-DE', fr: 'fr-FR' };
 
         function currentLang() {
@@ -2939,6 +2948,23 @@
                     ((direction !== 'right' && direction !== 'left') ||
                      Math.floor(next / 4) === Math.floor(idx / 4))) {
                     setModalFocus(buttons[next]);
+                    return;
+                }
+            }
+
+            // Horizontal moves inside a settings grid must stay in their
+            // visual row. Geometry-only search was selecting distant controls
+            // when the modal scrolled, making Background File unreachable.
+            var settingsRow = active.closest('.settings-row');
+            if (settingsRow && (direction === 'right' || direction === 'left')) {
+                var fields = toArray(settingsRow.querySelectorAll('.modal-nav')).filter(function(el) {
+                    return el.offsetParent !== null;
+                });
+                var currentField = fields.indexOf(active);
+                var nextField = currentField + (direction === 'right' ? 1 : -1);
+                if (nextField >= 0 && nextField < fields.length &&
+                    Math.floor(currentField / 3) === Math.floor(nextField / 3)) {
+                    setModalFocus(fields[nextField]);
                     return;
                 }
             }
