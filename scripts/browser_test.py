@@ -74,12 +74,15 @@ setTimeout(function () {
       var tiles=g.querySelectorAll('.app-tile');
       var count=Number(g.getAttribute('data-visible-tiles'));
       var step=Number(g.getAttribute('data-tile-step'));
-      return count > 0 && count <= tiles.length && step > 0 &&
-        Math.abs(g.getBoundingClientRect().width -
-            (count * tiles[0].getBoundingClientRect().width +
+      var expected = count * tiles[0].getBoundingClientRect().width +
             (count - 1) * (step - tiles[0].getBoundingClientRect().width) +
             parseFloat(getComputedStyle(g).paddingLeft) + parseFloat(getComputedStyle(g).paddingRight) +
-            parseFloat(getComputedStyle(g).borderLeftWidth) + parseFloat(getComputedStyle(g).borderRightWidth))) < 2;
+            parseFloat(getComputedStyle(g).borderLeftWidth) + parseFloat(getComputedStyle(g).borderRightWidth);
+      out.dockGeometry = {actual:g.getBoundingClientRect().width, expected:expected,
+        count:count, total:tiles.length, step:step, maxWidth:getComputedStyle(g).maxWidth,
+        parent:g.parentNode.getBoundingClientRect().width, windowWidth:window.innerWidth};
+      return count > 0 && count <= tiles.length && step > 0 &&
+        Math.abs(g.getBoundingClientRect().width - expected) < 2;
     })()
   };
   document.getElementById('moreAppsBtn').click();
@@ -226,7 +229,7 @@ def main():
             if result["hiddenApps"]:
                 failures.append(f"{lang}: unwanted app filter failed: {result['hiddenApps']}")
             if not all(result["dock"].values()):
-                failures.append(f"{lang}: dock or More navigation failed: {result['dock']}")
+                failures.append(f"{lang}: dock or More navigation failed: {result['dock']} geometry={result.get('dockGeometry')}")
             if not all(result["background"].values()):
                 failures.append(f"{lang}: background fallback/settings failed: {result['background']}")
             if not all(result["menuRows"].values()):
