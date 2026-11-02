@@ -57,12 +57,12 @@ setTimeout(function () {
     toggle: !!document.getElementById('cfgBackgroundEnabled'),
     picker: !!document.getElementById('cfgBackgroundFile'),
     dimming: !!document.getElementById('cfgBackgroundDim'),
-    fallback: !document.body.classList.contains('has-custom-background')
+    wallpaperSupported: typeof applyCustomBackground === 'function'
   };
   out.dock = {
-    quickTiles: document.querySelectorAll('#appsGrid .app-tile:not(.more-tile)').length === 4,
+    allPinned: document.querySelectorAll('#appsGrid .app-tile:not(.more-tile)').length === getDockApps().length,
     moreTile: !!document.getElementById('moreAppsBtn'),
-    preferences: !!document.getElementById('cfgDock4')
+    unifiedSettings: !!document.getElementById('pinnedOrderList') && !document.getElementById('cfgDock4')
   };
   document.getElementById('moreAppsBtn').click();
   var moreOpened = document.getElementById('allAppsDrawer').classList.contains('active');
@@ -71,13 +71,38 @@ setTimeout(function () {
   Object.defineProperty(goBack, 'keyCode', { value: 461 });
   document.dispatchEvent(goBack);
   out.dock.backClosesDrawer = moreOpened && !document.getElementById('allAppsDrawer').classList.contains('active');
-  out.menuRows = { maxFavorites: state.favorites.length <= 12, cityHidden: document.getElementById('cfgCity').parentNode.style.display === 'none', ipHidden: document.getElementById('cfgIpLocate').parentNode.style.display === 'none' };
+  out.menuRows = { scrollableDock: getComputedStyle(document.getElementById('appsGrid')).overflowX === 'auto', cityHidden: document.getElementById('cfgCity').parentNode.style.display === 'none', ipHidden: document.getElementById('cfgIpLocate').parentNode.style.display === 'none' };
   out.hiddenApps = ['Globoplay', 'SkyShowtime', 'LG Gaming Portal', '8 Ball Pool', 'LG Sports Playbook']
     .filter(function(title) { return !isHiddenApp('test-id', title); });
   addLaunchPoints([{ appId: 'skyshowtime.test', title: 'SkyShowtime' }, { appId: 'future.streaming', title: 'Future Streaming' }]);
   if (state.catalog.some(function(item) { return item.id === 'skyshowtime.test'; })) out.hiddenApps.push('SkyShowtime discovery');
   if (!state.catalog.some(function(item) { return item.id === 'future.streaming'; })) out.hiddenApps.push('Future app discovery');
   document.getElementById('customizeBtn').click();
+  // Regression: selecting more than twelve apps must work, with ordering
+  // controls available through the same focusable settings menu.
+  var originalPins = tempFavorites.slice();
+  var pinnedCatalog = state.catalog.filter(function(x) { return x.id.indexOf('preview.test.') === 0; });
+  for (var n = pinnedCatalog.length; n < 14; n++) {
+    var id = 'preview.test.' + n;
+    var extra = {id:id,title:'Test App '+n,tag:'Installed App',
+                 desc:'Test',bg:'#333',color:'#333'};
+    state.catalog.push(extra);
+  }
+  tempFavorites = state.catalog.filter(function(x) { return x.id.indexOf('preview.test.') === 0; })
+    .map(function(x) { return x.id; });
+  renderAppSelectorGrid();
+  renderPinnedOrderList();
+  out.dock.moreThan12 = tempFavorites.length === 14 &&
+    document.querySelectorAll('#pinnedOrderList .pinned-order-row').length === 14;
+  var moveRight = document.querySelector('#pinnedOrderList .pin-move[data-direction="1"]');
+  var oldFirst = tempFavorites[0];
+  moveRight.click();
+  out.dock.reorders = tempFavorites[1] === oldFirst &&
+    !!document.querySelector('#pinnedOrderList .pin-move.focused');
+  tempFavorites = originalPins;
+  renderAppSelectorGrid();
+  renderPinnedOrderList();
+  refreshModalNavList();
   var bgPicker = document.getElementById('cfgBackgroundFile');
   out.background.focusable = !bgPicker.disabled && modalNavItems.indexOf(bgPicker) !== -1;
   setModalFocus(document.getElementById('cfgBackgroundEnabled'));

@@ -66,21 +66,13 @@ GitHub Actions `CI` also automatically builds and uploads a tested installable I
 
 **Magic Remote settings navigation:** Use arrows to move between controls. Press **OK** on any dropdown to enter editing (blue highlight), arrows to change its value, then **OK** or **Back** to finish. Back when not editing closes Customize. Background File stays focusable even with only one installed image, and its available-image scan does not disrupt focus.
 
-## Wallpaper-first dock on Custom
+## Custom branch — scrolling wallpaper-first dock
 
-The latest design replaces the previous 12-tile home shelf with a **four-shortcut bottom dock** and a fifth **••• All apps** tile, keeping the background illustration visible across most of the screen. No floating app labels, brand badges or distracting promotional content appear on Home. The compact clock/date and gear remain at top-right.
+Home displays **every app you pin**, followed by a final **••• All apps** tile. The dock is a single row near the bottom; left/right on the remote automatically scrolls the strip to keep the focused tile visible. The wallpaper, date/time and gear remain unobstructed. App names are hidden on the main dock, but shown in the All apps drawer for clarity.
 
-By default, the dock prefers Netflix, Spotify, Apple TV (after webOS discovers its installed app) and the Nintendo Switch HDMI input (after assigning that input as Switch in Customize). If a preferred app is unavailable, an existing favorite fills the empty slot. From **Customize → Quick-launch dock**, choose all four shortcuts; the settings are saved on the TV. **•••** opens a scrollable remote-friendly menu of the remaining favorites, installed apps, HDMI shortcuts and USB Media Player, and Back returns to the dock.
+Open **⚙ Customize → Apps pinned to dock** to add/remove any number of shortcuts (no 12-app limit). Use the **Pinned order** ◀ / ▶ buttons to change their position. There are no separate Dock 1–4 dropdowns or bulky 12-tile reordering screen. The **•••** drawer lists the remaining detected installed apps, plus HDMI and USB Media Player shortcuts. Back closes the drawer without leaving Home.
 
-The existing favorites limit (12), editing/reordering, native app launches, HDMI device assignment, USB shortcut, theme, wallpaper/dimming and OLED idle screensaver are preserved. Your local `background.jpg` remains optional and is not replaced.
-
-## Custom branch — minimal home
-
-The `Custom` branch displays only the **date, time, a settings gear and a centered dock of app tiles**. Product branding, weather, recommendations, the hero heading and performance badges are hidden. The default dock contains four apps, but existing favorites on the TV are preserved.
-
-On your TV, open the **⚙ gear** to add or remove installed apps (up to twelve; four columns by three rows), change the theme/clock and select **Reorder** to rearrange your favorites. The Magic Remote **Back** key closes Customize rather than exiting the launcher. The app selector omits Globoplay, SkyShowtime, LG Gaming Portal, 8 Ball Pool and LG Sports Playbook by default; edit `HIDDEN_APP_TITLES` in `app/index.html` to change this list. New apps, such as Apple TV or Max, appear in the selector when detected by webOS. If they do not, approve the TV's installed-apps permission prompt.
-
-The initial favorites also include **HDMI 1** and **USB / Media**. HDMI 2–4 are selectable in settings, and the USB tile opens LG's native Media Player for videos, music and photos on an attached drive. The settings app selector scrolls through all discovered apps with Up/Down moving by rows. Location and weather API settings are hidden, and the minimal home no longer requests weather or trending feeds. If your TV is rooted, use webOS Dev Manager or the webOS CLI with root SSH (port 22); the old developer-mode installer uses port 9922 and will not work after removing Developer Mode.
+Existing local favorites, HDMI device assignments, your background image/dimming, language, clock and other display settings are kept. The excluded app titles remain excluded. The older four-slot settings are deprecated.
 
 **SSH installation:** The installer remembers TVs that reject forced PTY allocation in `~/.ssh/webos_tv_pty_support.json`. Delete this file if you need to re-detect the TV's terminal capabilities.
 
