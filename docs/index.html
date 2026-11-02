@@ -2816,6 +2816,68 @@
             }
         }
 
+        var settingsSavedSnapshot = null;
+        var confirmSettingsOpen = false, confirmFocusIndex = 0, confirmReturnFocus = null;
+        var confirmation = document.getElementById('settingsConfirm');
+        var confirmationButtons = [
+            document.getElementById('confirmKeepEditing'),
+            document.getElementById('confirmDiscard'),
+            document.getElementById('confirmSave')
+        ];
+        var snapshotIds = ['cfgCity','cfgTheme','cfgClockFormat','cfgPerfMode',
+            'cfgIpLocate','cfgLang','cfgTextSize','cfgTmdbKey',
+            'cfgBackgroundEnabled','cfgBackgroundFile','cfgBackgroundDim'];
+        function currentSettingsSnapshot() {
+            var choices = {}, devices = {};
+            snapshotIds.forEach(function(id) { choices[id] = document.getElementById(id).value; });
+            Object.keys(tempDevices).sort().forEach(function(key) { devices[key] = tempDevices[key]; });
+            return JSON.stringify({ pins:tempFavorites.slice(), devices:devices, choices:choices });
+        }
+        function settingsAreDirty() {
+            return settingsSavedSnapshot !== null &&
+                currentSettingsSnapshot() !== settingsSavedSnapshot;
+        }
+        function focusConfirmation(i) {
+            confirmFocusIndex = Math.max(0,Math.min(2,i));
+            confirmationButtons.forEach(function(btn) { btn.classList.remove('focused'); });
+            confirmationButtons[confirmFocusIndex].classList.add('focused');
+            confirmationButtons[confirmFocusIndex].focus();
+        }
+        function dismissConfirmation() {
+            confirmSettingsOpen = false;
+            confirmation.classList.remove('active');
+            if (confirmReturnFocus && modalOpen) setModalFocus(confirmReturnFocus);
+        }
+        function requestCloseSettings() {
+            if (pinMoveId) { finishPinMove(true); return; }
+            if (pinReorderMode) { setPinReorderMode(false); return; }
+            if (editingModalSelect) { endModalSelectEditing(); return; }
+            if (!settingsAreDirty()) { closeSettingsModal(); return; }
+            confirmReturnFocus = modalNavItems[modalIndex];
+            confirmSettingsOpen = true;
+            confirmation.classList.add('active');
+            focusConfirmation(2);
+        }
+        confirmationButtons[0].addEventListener('click', dismissConfirmation);
+        confirmationButtons[1].addEventListener('click', function() {
+            dismissConfirmation();
+            closeSettingsModal();
+        });
+        confirmationButtons[2].addEventListener('click', function() {
+            dismissConfirmation();
+            document.getElementById('saveModalBtn').click();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (!confirmSettingsOpen) return;
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') focusConfirmation(confirmFocusIndex - 1);
+            else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') focusConfirmation(confirmFocusIndex + 1);
+            else if (e.key === 'Enter' || e.keyCode === 13) confirmationButtons[confirmFocusIndex].click();
+            else if (e.keyCode === 461 || e.key === 'Escape' || e.key === 'GoBack') dismissConfirmation();
+            else return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }, true);
+
         function openSettingsModal() {
             if (shelfEdit) return;
             modalOpen = true;
@@ -2841,6 +2903,7 @@
             renderAppSelectorGrid();
             settingsModal.classList.add('active');
             refreshModalNavList();
+            settingsSavedSnapshot = currentSettingsSnapshot();
         }
 
         function renderHDMIOptions() {
@@ -2871,6 +2934,9 @@
             pinEnterDown = false;
             endModalSelectEditing();
             modalOpen = false;
+            settingsSavedSnapshot = null;
+            confirmSettingsOpen = false;
+            confirmation.classList.remove('active');
             settingsModal.classList.remove('active');
             setMainFocus(mainNavItems[curIndex]);
         }
@@ -3264,7 +3330,7 @@
             }
         }, 10000);
 
-        document.getElementById('closeModalBtn').addEventListener('click', closeSettingsModal);
+        document.getElementById('closeModalBtn').addEventListener('click', requestCloseSettings);
         document.getElementById('resetDefaultBtn').addEventListener('click', function() {
             tempFavorites = DEFAULT_FAVORITES.slice();
             tempDevices = {};
@@ -3359,7 +3425,7 @@
                 if (editingModalSelect) {
                     endModalSelectEditing();
                 } else if (modalOpen) {
-                    closeSettingsModal();
+                    requestCloseSettings();
                 } else if (drawerOpen) {
                     closeDrawer();
                 } else if (window.webOS && typeof webOS.platformBack === 'function') {
