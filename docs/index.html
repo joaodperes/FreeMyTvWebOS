@@ -2819,6 +2819,10 @@
         function openSettingsModal() {
             if (shelfEdit) return;
             modalOpen = true;
+            pinReorderMode = false;
+            pinEnterDown = false;
+            document.getElementById('pinReorderBtn').classList.remove('active');
+            document.getElementById('pinReorderBtn').textContent = 'Reorder pinned apps';
             tempFavorites = state.favorites.slice();
             tempDevices = shallowClone(state.hdmiDevices);
             renderHDMIOptions();
@@ -2862,8 +2866,9 @@
         }
 
         function closeSettingsModal() {
-            pinPressId = null; cancelPinHold();
             if (pinMoveId) finishPinMove(true);
+            pinReorderMode = false;
+            pinEnterDown = false;
             endModalSelectEditing();
             modalOpen = false;
             settingsModal.classList.remove('active');
@@ -2871,8 +2876,8 @@
         }
 
         var pinMoveId = null, pinMoveSnapshot = null;
-        var pinHoldTimer = null, pinPressId = null, pinMouseHeld = null;
-        var suppressPinClick = false, dragPinId = null;
+        var pinReorderMode = false;
+        var pinEnterDown = false, pinEnterAt = 0, dragPinId = null;
         function pinItemById(id) {
             return toArray(document.querySelectorAll('#appSelectorGrid .app-toggle-item')).filter(function(el) {
                 return el.getAttribute('data-app-id') === id;
@@ -2893,7 +2898,7 @@
             pinMoveId = id;
             pinMoveSnapshot = tempFavorites.slice();
             refreshPinGrid(id);
-            showToast('Move with ◀ ▶, then OK to place; Back cancels', 2800);
+            showToast('Left/Right to move · OK to place · Back to cancel');
             return true;
         }
         function movePin(delta) {
@@ -2912,8 +2917,6 @@
             if (cancel && pinMoveSnapshot) tempFavorites = pinMoveSnapshot.slice();
             pinMoveId = null;
             pinMoveSnapshot = null;
-            suppressPinClick = false;
-            pinMouseHeld = null;
             refreshPinGrid(target);
         }
         function reorderPinTo(id, targetId) {
@@ -2937,10 +2940,20 @@
             } else tempFavorites.push(id);
             refreshPinGrid(id);
         }
-        function cancelPinHold() {
-            if (pinHoldTimer !== null) clearTimeout(pinHoldTimer);
-            pinHoldTimer = null;
+        function setPinReorderMode(enabled) {
+            if (pinMoveId) finishPinMove(true);
+            pinReorderMode = !!enabled;
+            var button = document.getElementById('pinReorderBtn');
+            button.classList.toggle('active', pinReorderMode);
+            button.textContent = pinReorderMode ? 'Finish reordering' : 'Reorder pinned apps';
+            button.setAttribute('aria-pressed', String(pinReorderMode));
+            refreshPinGrid();
         }
+        document.getElementById('pinReorderBtn').addEventListener('click', function() {
+            setPinReorderMode(!pinReorderMode);
+            setModalFocus(document.getElementById('pinReorderBtn'));
+        });
+
         function renderAppSelectorGrid() {
             var container = document.getElementById('appSelectorGrid');
             var previousScroll = container.scrollTop;
@@ -2971,31 +2984,17 @@
                 marker.textContent = isPinned ? '✓' : '+';
                 item.appendChild(title); item.appendChild(marker);
                 item.addEventListener('click', function(event) {
-                    if (suppressPinClick || pinMoveId) {
-                        suppressPinClick = false;
+                    if (pinReorderMode) {
+                        if (pinMoveId === app.id) finishPinMove(false);
+                        else if (isPinned && !pinMoveId) beginPinMove(app.id);
+                        else if (!isPinned) showToast('Only pinned apps can be reordered');
                         event.preventDefault();
                         return;
                     }
                     togglePin(app.id);
                 });
-                item.addEventListener('mousedown', function(event) {
-                    if (!isPinned || event.button !== 0 || pinMoveId) return;
-                    pinMouseHeld = app.id;
-                    cancelPinHold();
-                    pinHoldTimer = setTimeout(function() {
-                        if (pinMouseHeld === app.id) {
-                            pinMouseHeld = null;
-                            suppressPinClick = true;
-                            beginPinMove(app.id);
-                        }
-                    }, 600);
-                });
-                item.addEventListener('mouseup', function() { pinMouseHeld = null; cancelPinHold(); });
-                item.addEventListener('mouseleave', function() { pinMouseHeld = null; cancelPinHold(); });
                 item.addEventListener('dragstart', function(event) {
                     if (!isPinned || !event.dataTransfer) return event.preventDefault();
-                    pinMouseHeld = null;
-                    cancelPinHold();
                     dragPinId = app.id;
                     event.dataTransfer.effectAllowed = 'move';
                     event.dataTransfer.setData('text/plain', app.id);
@@ -3015,49 +3014,33 @@
             container.scrollTop = previousScroll;
         }
 
-        // Capture OK on app tiles before webOS's ordinary modal Enter handler.
-        // A short press toggles pinning; holding enters D-pad reorder mode.
+        // Remote OK repeats keydown while held and some models omit keyup.
+        // Handle a single selection on keydown, ignoring rapid auto-repeats.
         document.addEventListener('keydown', function(event) {
-            if (!modalOpen) return;
+            if (!modalOpen || confirmSettingsOpen) return;
             var key = event.key || (event.keyCode === 13 ? 'Enter' : '');
             var active = modalNavItems[modalIndex];
             var inGrid = active && document.getElementById('appSelectorGrid').contains(active);
             if (pinMoveId) {
-                if (key === 'ArrowLeft' || key === 'ArrowRight') {
+                if (key === 'ArrowLeft' || key === 'ArrowRight')
                     movePin(key === 'ArrowLeft' ? -1 : 1);
-                } else if (key === 'Enter') finishPinMove(false);
-                else if (event.keyCode === 461 || key === 'Escape' || key === 'GoBack')
+                else if (key === 'Enter') {
+                    if (!pinEnterDown || Date.now() - pinEnterAt > 450) finishPinMove(false);
+                } else if (event.keyCode === 461 || key === 'Escape' || key === 'GoBack')
                     finishPinMove(true);
                 else return;
-                cancelPinHold(); pinPressId = null;
+                if (key === 'Enter') { pinEnterDown = true; pinEnterAt = Date.now(); }
                 event.preventDefault(); event.stopImmediatePropagation();
                 return;
             }
             if (!inGrid || key !== 'Enter') return;
-            if (!pinPressId) {
-                pinPressId = active.getAttribute('data-app-id');
-                pinHoldTimer = setTimeout(function() {
-                    if (pinPressId) beginPinMove(pinPressId);
-                    pinPressId = null;
-                    pinHoldTimer = null;
-                }, 600);
-            }
-            event.preventDefault();
-            event.stopImmediatePropagation();
-        }, true);
-        document.addEventListener('keyup', function(event) {
-            var key = event.key || (event.keyCode === 13 ? 'Enter' : '');
-            if (key !== 'Enter' || !pinPressId) return;
-            var id = pinPressId;
-            pinPressId = null; cancelPinHold();
-            if (modalOpen && !pinMoveId) togglePin(id);
+            if (!pinEnterDown || Date.now() - pinEnterAt > 450) active.click();
+            pinEnterDown = true;
+            pinEnterAt = Date.now();
             event.preventDefault(); event.stopImmediatePropagation();
         }, true);
-        // Reset pending hold if focus leaves the tile or Customize closes.
         document.addEventListener('keyup', function(event) {
-            if (event.key === 'Escape' || event.keyCode === 461) {
-                pinPressId = null; cancelPinHold();
-            }
+            if (event.key === 'Enter' || event.keyCode === 13) pinEnterDown = false;
         }, true);
 
         function refreshModalNavList() {
@@ -3092,6 +3075,16 @@
             else if (r.top < p.top + 20) panel.scrollTop -= p.top - r.top + 28;
         }
 
+        function modalGridColumns(grid) {
+            var children = toArray(grid.querySelectorAll('.modal-nav'));
+            if (!children.length) return 4;
+            var top = children[0].getBoundingClientRect().top;
+            var count = 0;
+            children.forEach(function(item) {
+                if (Math.abs(item.getBoundingClientRect().top - top) <= 6) count++;
+            });
+            return Math.max(1, count);
+        }
         function moveModalFocus(direction) {
             var active = modalNavItems[modalIndex];
             if (!active) return;
@@ -3099,12 +3092,13 @@
             if (grid.contains(active)) {
                 var buttons = toArray(grid.querySelectorAll('.modal-nav'));
                 var idx = buttons.indexOf(active);
-                var step = direction === 'down' ? 4 : direction === 'up' ? -4 :
+                var columns = modalGridColumns(grid);
+                var step = direction === 'down' ? columns : direction === 'up' ? -columns :
                     direction === 'right' ? 1 : -1;
                 var next = idx + step;
                 if (next >= 0 && next < buttons.length &&
                     ((direction !== 'right' && direction !== 'left') ||
-                     Math.floor(next / 4) === Math.floor(idx / 4))) {
+                     Math.floor(next / columns) === Math.floor(idx / columns))) {
                     setModalFocus(buttons[next]);
                     return;
                 }
