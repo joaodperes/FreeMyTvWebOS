@@ -190,7 +190,7 @@ def main():
                 failures.append(f"{lang}: page did not finish booting ({stderr.strip()})")
                 continue
             if result.get("probeCrash"):
-                failures.append(f"{lang}: probe crashed: {result['probeCrash']}")
+                failures.append(f"{lang}: probe crashed: {result['probeCrash']} | earlier JS errors: {result.get('earlyErrors', [])}")
                 continue
             if result["errors"]:
                 failures.append(f"{lang}: uncaught JS errors: {result['errors'][:3]}")
