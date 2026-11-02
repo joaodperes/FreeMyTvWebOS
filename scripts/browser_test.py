@@ -34,6 +34,7 @@ EXPECTED = {  # language -> (element id, expected text)
 # Runs inside the page after boot and reports into <pre id="__result">.
 PROBE = r"""
 setTimeout(function () {
+ try {
   var out = { errors: window.__errors || [], missing: [], keyDiff: [], text: '', hiddenApps: [], backClosesSettings: false, menuRows: {}, background: {}, dock: {} };
   var base = Object.keys(I18N.pt).sort().join('\n');
   Object.keys(I18N).forEach(function (l) {
@@ -133,6 +134,12 @@ setTimeout(function () {
   pre.id = '__result';
   pre.textContent = JSON.stringify(out);
   document.body.appendChild(pre);
+ } catch (problem) {
+   var errorPre = document.createElement('pre');
+   errorPre.id = '__result';
+   errorPre.textContent = JSON.stringify({probeCrash: String(problem && (problem.stack || problem.message) || problem)});
+   document.body.appendChild(errorPre);
+ }
 }, 1500);
 """
 
@@ -181,6 +188,9 @@ def main():
             result, stderr = run_language(chrome, lang, workdir)
             if result is None:
                 failures.append(f"{lang}: page did not finish booting ({stderr.strip()})")
+                continue
+            if result.get("probeCrash"):
+                failures.append(f"{lang}: probe crashed: {result['probeCrash']}")
                 continue
             if result["errors"]:
                 failures.append(f"{lang}: uncaught JS errors: {result['errors'][:3]}")
