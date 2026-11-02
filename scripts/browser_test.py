@@ -239,13 +239,13 @@ def main():
                 if result["missing"]:
                     failures.append(f"strings without translations: {result['missing']}")
             print(f"[*] {lang}: ok" if not any(x.startswith(lang + ":") for x in failures) else f"[!] {lang}: failed")
-    # The browser can't discover LG-installed apps. Verify opt-in PC preview
-    # displays its clearly marked placeholder without affecting TV discovery.
-    preview, stderr = run_language(chrome, "en", workdir, demo=True)
-    if preview is None:
-        failures.append(f"desktop preview: page did not finish ({stderr.strip()})")
-    elif preview.get("probeCrash") or not preview.get("dock", {}).get("desktopPreview"):
-        failures.append(f"desktop preview: {preview.get('probeCrash', preview.get('dock'))}")
+        # The browser can't discover LG-installed apps. Verify opt-in PC preview
+        # displays its clearly marked placeholder without affecting TV discovery.
+        preview, stderr = run_language(chrome, "en", workdir, demo=True)
+        if preview is None:
+            failures.append(f"desktop preview: page did not finish ({stderr.strip()})")
+        elif preview.get("probeCrash") or not preview.get("dock", {}).get("desktopPreview"):
+            failures.append(f"desktop preview: {preview.get('probeCrash', preview.get('dock'))}")
 
     for f in failures:
         print(f"[!] {f}")
