@@ -137,7 +137,7 @@ setTimeout(function () {
  } catch (problem) {
    var errorPre = document.createElement('pre');
    errorPre.id = '__result';
-   errorPre.textContent = JSON.stringify({probeCrash: String(problem && (problem.stack || problem.message) || problem)});
+   errorPre.textContent = JSON.stringify({probeCrash: String(problem && (problem.stack || problem.message) || problem), earlyErrors: window.__errors || []});
    document.body.appendChild(errorPre);
  }
 }, 1500);
