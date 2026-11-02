@@ -69,6 +69,13 @@ setTimeout(function () {
       }).length,
     moreTile: !!document.getElementById('moreAppsBtn'),
     unifiedSettings: !document.getElementById('pinnedOrderList') && !document.getElementById('cfgDock4'),
+    focusPreservesSize: (function() {
+      var tile = document.querySelector('#appsGrid .app-tile:not(.more-tile)');
+      tile.classList.add('focused');
+      var transform = getComputedStyle(tile).transform;
+      tile.classList.remove('focused');
+      return transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)';
+    })(),
     fullTiles: (function() {
       var g=document.getElementById('appsGrid');
       var tiles=g.querySelectorAll('.app-tile');
@@ -114,10 +121,16 @@ setTimeout(function () {
   out.dock.moreThan12 = tempFavorites.length === 14 &&
     document.querySelectorAll('#appSelectorGrid .app-toggle-item.selected').length === 14;
   var before = tempFavorites[0];
-  out.dock.reorders = beginPinMove(before) && movePin(1) &&
-    tempFavorites[1] === before && !!pinItemById(before).classList.contains('pin-moving');
-  finishPinMove(false);
+  document.getElementById('pinReorderBtn').click();
+  out.dock.reorders = pinReorderMode;
+  pinItemById(before).click();
+  out.dock.reorders = out.dock.reorders && pinMoveId === before &&
+    movePin(1) && tempFavorites[1] === before &&
+    !!pinItemById(before).classList.contains('pin-moving');
+  pinItemById(before).click();
   out.dock.reorders = out.dock.reorders && !pinMoveId;
+  document.getElementById('pinReorderBtn').click();
+  out.dock.reorders = out.dock.reorders && !pinReorderMode;
   var favoriteBeforeOverflow = state.favorites.slice();
   state.favorites = tempFavorites.slice();
   renderAppsShelf();
@@ -149,9 +162,14 @@ setTimeout(function () {
   var editEnter = document.createEvent('Event');
   editEnter.initEvent('keydown', true, true);
   Object.defineProperty(editEnter, 'key', { value: 'Enter' });
+  var editUp = document.createEvent('Event');
+  editUp.initEvent('keyup', true, true);
+  Object.defineProperty(editUp, 'key', { value: 'Enter' });
   document.dispatchEvent(editEnter);
   out.background.editableByRemote = editingModalSelect === bgPicker;
+  document.dispatchEvent(editUp);
   document.dispatchEvent(editEnter);
+  document.dispatchEvent(editUp);
   out.background.editableByRemote = out.background.editableByRemote && !editingModalSelect;
   var wasOpen = document.getElementById('settingsModal').classList.contains('active');
   var backEvent = document.createEvent('Event');
@@ -159,6 +177,19 @@ setTimeout(function () {
   Object.defineProperty(backEvent, 'keyCode', { value: 461 });
   document.dispatchEvent(backEvent);
   out.backClosesSettings = wasOpen && !document.getElementById('settingsModal').classList.contains('active');
+  document.getElementById('customizeBtn').click();
+  var initialDim = document.getElementById('cfgBackgroundDim').value;
+  document.getElementById('cfgBackgroundDim').value = initialDim === 'strong' ? 'light' : 'strong';
+  document.dispatchEvent(backEvent);
+  out.dock.unsavedPrompt = document.getElementById('settingsConfirm').classList.contains('active') &&
+    document.getElementById('settingsModal').classList.contains('active');
+  document.getElementById('confirmKeepEditing').click();
+  out.dock.keepEditing = document.getElementById('settingsModal').classList.contains('active') &&
+    !document.getElementById('settingsConfirm').classList.contains('active');
+  document.dispatchEvent(backEvent);
+  document.getElementById('confirmDiscard').click();
+  out.dock.discardWorks = !document.getElementById('settingsModal').classList.contains('active') &&
+    state.backgroundDim === initialDim;
   out.text = document.getElementById('customizeBtn').textContent.replace(/^\s+|\s+$/g, '');
   var pre = document.createElement('pre');
   pre.id = '__result';
